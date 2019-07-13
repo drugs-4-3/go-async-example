@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -16,30 +17,50 @@ type Product struct {
 	Shipping string
 }
 var host = "http://localhost:8080"
-var prodId = "1_7581887"
+var prodId = "1_7613513"
 
-var procedures = []fetchFunction{
-	fetchName,
-	fetchShipping,
-	fetchPrice,
-}
 
 func main() {
 	p := Product{}
 
 	start := time.Now()
-	loadDataFromApi(&p)
+	loadProductData(&p)
 	duration := time.Since(start)
 
 	printResults(duration, p)
 }
 
-func loadDataFromApi(p *Product) {
-	for _, f := range procedures {
-		func() {
-			checkErr(f(p))
-		}()
-	}
+func loadProductData(p *Product) {
+	var wg sync.WaitGroup
+
+	//var name string = ""
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n, err := fetchName()
+		checkErr(err)
+		p.Name = n
+	}()
+
+	//var price float64 = 0
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pr, err := fetchPrice()
+		checkErr(err)
+		p.MinPrice = pr
+	}()
+
+	//var shippingDate string = ""
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sh, err := fetchShipping()
+		checkErr(err)
+		p.Shipping = sh
+	}()
+
+	wg.Wait()
 }
 
 func printResults(d time.Duration, p Product) {
@@ -55,9 +76,7 @@ func checkErr(err error) {
 	}
 }
 
-type fetchFunction func(p *Product) error
-
-func fetchName(p *Product) error {
+func fetchName() (string, error) {
 	url := host + "/products/" + prodId
 
 	type productNameResponse struct {
@@ -66,14 +85,13 @@ func fetchName(p *Product) error {
 	pnr := productNameResponse{}
 	err := fillModel(url, &pnr)
 	if err != nil {
-		return err
+		return "", err
 	}
-	p.Name = pnr.Name
 
-	return nil
+	return pnr.Name, nil
 }
 
-func fetchPrice(p *Product) error {
+func fetchPrice() (float64, error) {
 	url := host + "/products/" + prodId + "/price"
 
 	type productPriceResponse struct {
@@ -86,14 +104,12 @@ func fetchPrice(p *Product) error {
 	ppr := productPriceResponse{}
 	err := fillModel(url, &ppr)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	p.MinPrice = ppr.Retail.From.Value
-
-	return nil
+	return ppr.Retail.From.Value, nil
 }
 
-func fetchShipping(p *Product) error {
+func fetchShipping() (string, error) {
 	url := host + "/products/" + prodId + "/shippings"
 
 	type productShippingResponse struct {
@@ -108,14 +124,13 @@ func fetchShipping(p *Product) error {
 	psr := productShippingResponse{}
 	err := fillModel(url, &psr)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(psr.Embedded.Items) == 0 {
-		return errors.New("there were no shipping elements")
+		return "", errors.New("there were no shipping elements")
 	}
 
-	p.Shipping = psr.Embedded.Items[0].Date.From
-	return nil
+	return psr.Embedded.Items[0].Date.From, nil
 }
 
 // fills
