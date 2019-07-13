@@ -37,27 +37,21 @@ func loadProductData(p *Product) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		n, err := fetchName()
-		checkErr(err)
-		p.Name = n
+		checkErr(p.fetchName())
 	}()
 
 	//var price float64 = 0
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pr, err := fetchPrice()
-		checkErr(err)
-		p.MinPrice = pr
+		checkErr(p.fetchPrice())
 	}()
 
 	//var shippingDate string = ""
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sh, err := fetchShipping()
-		checkErr(err)
-		p.Shipping = sh
+		checkErr(p.fetchShipping())
 	}()
 
 	wg.Wait()
@@ -76,7 +70,7 @@ func checkErr(err error) {
 	}
 }
 
-func fetchName() (string, error) {
+func (p *Product)fetchName() error {
 	url := host + "/products/" + prodId
 
 	type productNameResponse struct {
@@ -85,13 +79,14 @@ func fetchName() (string, error) {
 	pnr := productNameResponse{}
 	err := fillModel(url, &pnr)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return pnr.Name, nil
+	p.Name = pnr.Name
+	return nil
 }
 
-func fetchPrice() (float64, error) {
+func (p *Product)fetchPrice() (error) {
 	url := host + "/products/" + prodId + "/price"
 
 	type productPriceResponse struct {
@@ -104,12 +99,13 @@ func fetchPrice() (float64, error) {
 	ppr := productPriceResponse{}
 	err := fillModel(url, &ppr)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return ppr.Retail.From.Value, nil
+	p.MinPrice = ppr.Retail.From.Value
+	return nil
 }
 
-func fetchShipping() (string, error) {
+func (p *Product)fetchShipping() (error) {
 	url := host + "/products/" + prodId + "/shippings"
 
 	type productShippingResponse struct {
@@ -124,13 +120,14 @@ func fetchShipping() (string, error) {
 	psr := productShippingResponse{}
 	err := fillModel(url, &psr)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if len(psr.Embedded.Items) == 0 {
-		return "", errors.New("there were no shipping elements")
+		return errors.New("there were no shipping elements")
 	}
 
-	return psr.Embedded.Items[0].Date.From, nil
+	p.Shipping = psr.Embedded.Items[0].Date.From
+	return nil
 }
 
 // fills
